@@ -95,6 +95,22 @@ nvmlReturn_t nvmlDeviceGetMemoryInfo(nvmlDevice_t device, nvmlMemory_t *memory) 
   return nvmlDeviceGetMemoryInfoFunc(device, memory);
 }
 
+nvmlReturn_t (*nvmlDeviceGetGraphicsRunningProcessesFunc)(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos);
+nvmlReturn_t nvmlDeviceGetGraphicsRunningProcesses(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos) {
+  if (nvmlDeviceGetGraphicsRunningProcessesFunc == NULL) {
+    return NVML_ERROR_FUNCTION_NOT_FOUND;
+  }
+  return nvmlDeviceGetGraphicsRunningProcesses(device, infoCount, infos);
+}
+
+nvmlReturn_t (*nvmlDeviceGetComputeRunningProcessesFunc)(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos);
+nvmlReturn_t nvmlDeviceGetComputeRunningProcesses(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos) {
+  if (nvmlDeviceGetComputeRunningProcessesFunc == NULL) {
+    return NVML_ERROR_FUNCTION_NOT_FOUND;
+  }
+  return nvmlDeviceGetComputeRunningProcesses(device, infoCount, infos);
+}
+
 nvmlReturn_t (*nvmlDeviceGetUtilizationRatesFunc)(nvmlDevice_t device, nvmlUtilization_t *utilization);
 nvmlReturn_t nvmlDeviceGetUtilizationRates(nvmlDevice_t device, nvmlUtilization_t *utilization) {
   if (nvmlDeviceGetUtilizationRatesFunc == NULL) {
@@ -175,6 +191,14 @@ nvmlReturn_t nvmlInit_dl(void) {
   }
   nvmlDeviceGetMemoryInfoFunc = dlsym(nvmlHandle, "nvmlDeviceGetMemoryInfo");
   if (nvmlDeviceGetMemoryInfoFunc == NULL) {
+    return NVML_ERROR_FUNCTION_NOT_FOUND;
+  }
+  nvmlDeviceGetGraphicsRunningProcessesFunc = dlsym(nvmlHandle, "nvmlDeviceGetGraphicsRunningProcesses");
+  if (nvmlDeviceGetGraphicsRunningProcessesFunc == NULL) {
+    return NVML_ERROR_FUNCTION_NOT_FOUND;
+  }
+  nvmlDeviceGetComputeRunningProcessesFunc = dlsym(nvmlHandle, "nvmlDeviceGetComputeRunningProcesses");
+  if (nvmlDeviceGetComputeRunningProcessesFunc == NULL) {
     return NVML_ERROR_FUNCTION_NOT_FOUND;
   }
   nvmlDeviceGetUtilizationRatesFunc = dlsym(nvmlHandle, "nvmlDeviceGetUtilizationRates");
@@ -404,6 +428,50 @@ func (d Device) MemoryInfo() (uint64, uint64, error) {
 	var memory C.nvmlMemory_t
 	r := C.nvmlDeviceGetMemoryInfo(d.dev, &memory)
 	return uint64(memory.total), uint64(memory.used), errorString(r)
+}
+
+func (d Device) GraphicsMemoryUsed(processIds []uint64) (uint64, error) {
+	if C.nvmlHandle == nil {
+		return 0, errLibraryNotLoaded
+	}
+
+	var infoCount = C.uint(len(processIds))
+	var infos []C.nvmlProcessInfo_t
+
+	for _, processId := range processIds {
+		var info = C.nvmlProcessInfo_t {pid: C.uint(processId), usedGpuMemory: 0}
+		infos = append(infos, info)
+	}
+
+	r := C.nvmlDeviceGetGraphicsRunningProcesses(d.dev, &infoCount, &infos[0])
+
+	var sum uint64 = 0
+	for _, info := range infos {
+		sum += uint64(info.usedGpuMemory)
+	}
+	return sum, errorString(r)
+}
+
+func (d Device) ComputeMemoryUsed(processIds []uint64) (uint64, error) {
+	if C.nvmlHandle == nil {
+		return 0, errLibraryNotLoaded
+	}
+
+	var infoCount = C.uint(len(processIds))
+	var infos []C.nvmlProcessInfo_t
+
+	for _, processId := range processIds {
+		var info = C.nvmlProcessInfo_t {pid: C.uint(processId), usedGpuMemory: 0}
+		infos = append(infos, info)
+	}
+
+	r := C.nvmlDeviceGetComputeRunningProcesses(d.dev, &infoCount, &infos[0])
+
+	var sum uint64 = 0
+	for _, info := range infos {
+		sum += uint64(info.usedGpuMemory)
+	}
+	return sum, errorString(r)
 }
 
 // UtilizationRates returns the percent of time over the past sample period during which:
