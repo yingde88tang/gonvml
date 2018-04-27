@@ -485,6 +485,7 @@ func (d Device) ComputeMemoryUsed(processIds []uint64) (uint64, error) {
 	for processCount := C.uint(0); processCount < infoCount; processCount++ {
 		var info = C.nvmlProcessInfo_t {usedGpuMemory: 0}
 		infos = append(infos, info)
+		fmt.Printf("\tprocessCount: %v\n", processCount)
 	}
 
 	r = C.nvmlDeviceGetComputeRunningProcesses(d.dev, &infoCount, &infos[0])
@@ -503,6 +504,7 @@ func (d Device) ComputeMemoryUsed(processIds []uint64) (uint64, error) {
 	}
 	return sum, errorString(r)
 }
+
 
 // UtilizationRates returns the percent of time over the past sample period during which:
 // utilization.gpu: one or more kernels were executing on the GPU.

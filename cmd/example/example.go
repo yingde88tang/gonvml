@@ -31,7 +31,7 @@ func main() {
 		return
 	}
 	defer gonvml.Shutdown()
-	fmt.Printf("Initialize() took %v\n", time.Since(start))
+	fmt.Printf("Initialize() took time %v\n", time.Since(start))
 
 	driverVersion, err := gonvml.SystemDriverVersion()
 	if err != nil {
