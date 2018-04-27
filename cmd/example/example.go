@@ -31,7 +31,7 @@ func main() {
 		return
 	}
 	defer gonvml.Shutdown()
-	fmt.Printf("Initialize() took %v\n", time.Since(start))
+	fmt.Printf("Initialize() took time %v\n", time.Since(start))
 
 	driverVersion, err := gonvml.SystemDriverVersion()
 	if err != nil {
@@ -81,6 +81,23 @@ func main() {
 			return
 		}
 		fmt.Printf("\tmemory.total: %v, memory.used: %v\n", totalMemory, usedMemory)
+
+		graphicsProcessIds := []uint64{1280, 1288}
+		graphicsMemoryUsed, err := dev.GraphicsMemoryUsed(graphicsProcessIds)
+		if err != nil {
+			fmt.Printf("\tdev.GraphicsMemoryUsed() error: %v\n", err)
+			return
+		}
+		fmt.Printf("\tgraphics.memory.used: %v\n", graphicsMemoryUsed)
+
+		computeProcessIds := []uint64{24931}
+		computeMemoryUsed, err := dev.ComputeMemoryUsed(computeProcessIds)
+		if err != nil {
+			fmt.Printf("\tdev.ComputeMemoryUsed() error: %v\n", err)
+			return
+		}
+		fmt.Printf("\tcompute.memory.used: %v\n", computeMemoryUsed)
+
 
 		gpuUtilization, memoryUtilization, err := dev.UtilizationRates()
 		if err != nil {
