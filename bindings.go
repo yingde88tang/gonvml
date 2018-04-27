@@ -100,7 +100,7 @@ nvmlReturn_t nvmlDeviceGetGraphicsRunningProcesses(nvmlDevice_t device, unsigned
   if (nvmlDeviceGetGraphicsRunningProcessesFunc == NULL) {
     return NVML_ERROR_FUNCTION_NOT_FOUND;
   }
-  return nvmlDeviceGetGraphicsRunningProcesses(device, infoCount, infos);
+  return nvmlDeviceGetGraphicsRunningProcessesFunc(device, infoCount, infos);
 }
 
 nvmlReturn_t (*nvmlDeviceGetComputeRunningProcessesFunc)(nvmlDevice_t device, unsigned int *infoCount, nvmlProcessInfo_t *infos);
@@ -108,7 +108,7 @@ nvmlReturn_t nvmlDeviceGetComputeRunningProcesses(nvmlDevice_t device, unsigned 
   if (nvmlDeviceGetComputeRunningProcessesFunc == NULL) {
     return NVML_ERROR_FUNCTION_NOT_FOUND;
   }
-  return nvmlDeviceGetComputeRunningProcesses(device, infoCount, infos);
+  return nvmlDeviceGetComputeRunningProcessesFunc(device, infoCount, infos);
 }
 
 nvmlReturn_t (*nvmlDeviceGetUtilizationRatesFunc)(nvmlDevice_t device, nvmlUtilization_t *utilization);
@@ -430,46 +430,76 @@ func (d Device) MemoryInfo() (uint64, uint64, error) {
 	return uint64(memory.total), uint64(memory.used), errorString(r)
 }
 
+// GraphicsMemoryUsed returns the sum of specified processes GPU memory used for graphics.
 func (d Device) GraphicsMemoryUsed(processIds []uint64) (uint64, error) {
 	if C.nvmlHandle == nil {
 		return 0, errLibraryNotLoaded
 	}
 
-	var infoCount = C.uint(len(processIds))
-	var infos []C.nvmlProcessInfo_t
+	infoCount := C.uint(0)
+	r := C.nvmlDeviceGetGraphicsRunningProcesses(d.dev, &infoCount, nil)
+	// Interesting to note, when the query succeeds, it returns NVML_ERROR_INSUFFICIENT_SIZE = 7,
+	// not NVML_SUCCESS = 0, so the return value check is skipped here.
+	if infoCount == 0 {
+		return 0, errorString(r)
+	}
 
-	for _, processId := range processIds {
-		var info = C.nvmlProcessInfo_t {pid: C.uint(processId), usedGpuMemory: 0}
+	var infos []C.nvmlProcessInfo_t
+	for processCount := C.uint(0); processCount < infoCount; processCount++ {
+		var info = C.nvmlProcessInfo_t {pid: 0, usedGpuMemory: 0}
 		infos = append(infos, info)
 	}
 
-	r := C.nvmlDeviceGetGraphicsRunningProcesses(d.dev, &infoCount, &infos[0])
+	r = C.nvmlDeviceGetGraphicsRunningProcesses(d.dev, &infoCount, &infos[0])
+	if r != C.NVML_SUCCESS {
+		return 0, errorString(r)
+	}
 
 	var sum uint64 = 0
 	for _, info := range infos {
-		sum += uint64(info.usedGpuMemory)
+		for _, processId := range processIds {
+			if C.uint(processId) == info.pid {
+				sum += uint64(info.usedGpuMemory)
+				break
+			}
+		}
 	}
 	return sum, errorString(r)
 }
 
+// ComputeMemoryUsed returns the sum of specified processes GPU memory used for compute.
 func (d Device) ComputeMemoryUsed(processIds []uint64) (uint64, error) {
 	if C.nvmlHandle == nil {
 		return 0, errLibraryNotLoaded
 	}
 
-	var infoCount = C.uint(len(processIds))
-	var infos []C.nvmlProcessInfo_t
+	infoCount := C.uint(0)
+	r := C.nvmlDeviceGetComputeRunningProcesses(d.dev, &infoCount, nil)
+	// Interesting to note, when the query succeeds, it returns NVML_ERROR_INSUFFICIENT_SIZE = 7,
+	// not NVML_SUCCESS = 0, so the return value check is skipped here.
+	if infoCount == 0 {
+		return 0, errorString(r)
+	}
 
-	for _, processId := range processIds {
-		var info = C.nvmlProcessInfo_t {pid: C.uint(processId), usedGpuMemory: 0}
+	var infos []C.nvmlProcessInfo_t
+	for processCount := C.uint(0); processCount < infoCount; processCount++ {
+		var info = C.nvmlProcessInfo_t {usedGpuMemory: 0}
 		infos = append(infos, info)
 	}
 
-	r := C.nvmlDeviceGetComputeRunningProcesses(d.dev, &infoCount, &infos[0])
+	r = C.nvmlDeviceGetComputeRunningProcesses(d.dev, &infoCount, &infos[0])
+	if r != C.NVML_SUCCESS {
+		return 0, errorString(r)
+	}
 
 	var sum uint64 = 0
 	for _, info := range infos {
-		sum += uint64(info.usedGpuMemory)
+		for _, processId := range processIds {
+			if C.uint(processId) == info.pid {
+				sum += uint64(info.usedGpuMemory)
+				break
+			}
+		}
 	}
 	return sum, errorString(r)
 }
